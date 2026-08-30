@@ -25,25 +25,13 @@ def keep_alive():
 # ----- CONFIGURACIÓN DEL BOT -----
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD_ID = int(os.getenv('GUILD_ID'))
 
 intents = discord.Intents.default()
 intents.members = True
-intents.guilds = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 contador_cartas = 0
-
-@bot.event
-async def on_ready():
-    print(f'✅ Bot encendido y conectado como {bot.user}')
-    try:
-        servidor = discord.Object(id=GUILD_ID)
-        bot.tree.copy_global_to(guild=servidor)
-        await bot.tree.sync(guild=servidor)
-        print("✅ Comandos de Cartas Anónimas sincronizados correctamente.")
-    except Exception as e:
-        print(f"❌ Error al cargar los comandos: {e}")
 
 # ----- COMANDO: /carta -----
 @bot.tree.command(name="carta", description="Envía una carta anónima al buzón del servidor.")
@@ -66,15 +54,49 @@ async def carta(interaction: discord.Interaction, para: str, mensaje: str):
     embed = discord.Embed(
         title=f"💌 Carta Anónima #{contador_cartas}",
         description=f"**Para:** {para}\n\n{mensaje}",
-        color=discord.Color.from_rgb(255, 182, 193), # Rosa pastel
+        color=discord.Color.from_rgb(255, 182, 193),
         timestamp=datetime.now()
     )
     embed.set_footer(text="Enviado de forma 100% anónima ✨")
 
-    # Enviar al canal y confirmar al usuario en privado
     await canal_buzon.send(content=f"📬 ¡Hay una nueva carta para {para}!", embed=embed)
     await interaction.response.send_message("✅ Tu carta anónima ha sido enviada al buzón con éxito.", ephemeral=True)
 
-# Iniciar servidor web y bot
+# ----- COMANDO DE TEXTO ALTERNATIVO (!carta) -----
+@bot.command(name="carta")
+async def carta_prefix(ctx, para: str, *, mensaje: str):
+    global contador_cartas
+    contador_cartas += 1
+
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    canal_buzon = discord.utils.get(ctx.guild.text_channels, name="cartas-anonimas")
+    if not canal_buzon:
+        canal_buzon = discord.utils.get(ctx.guild.text_channels, name="confesiones")
+    if not canal_buzon:
+        canal_buzon = ctx.channel
+
+    embed = discord.Embed(
+        title=f"💌 Carta Anónima #{contador_cartas}",
+        description=f"**Para:** {para}\n\n{mensaje}",
+        color=discord.Color.from_rgb(255, 182, 193),
+        timestamp=datetime.now()
+    )
+    embed.set_footer(text="Enviado de forma 100% anónima ✨")
+
+    await canal_buzon.send(content=f"📬 ¡Hay una nueva carta para {para}!", embed=embed)
+
+@bot.event
+async def on_ready():
+    print(f'✅ Bot encendido y conectado como {bot.user}')
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Sincronizados {len(synced)} comandos globalmente.")
+    except Exception as e:
+        print(f"❌ Error al sincronizar: {e}")
+
 keep_alive()
 bot.run(TOKEN)
